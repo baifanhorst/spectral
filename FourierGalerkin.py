@@ -20,9 +20,12 @@ def CalcInitCond(f, N):
     u0 = np.zeros(N+1, dtype=complex)
     
     for k in range(-N2, N2+1):
-        integrand = lambda x, k: f(x) * np.exp(-1j * k * x) 
-        u0[k+N2] = integrate.quad(integrand, 0, 2*np.pi, args=(k,))[0] / (2 * np.pi) 
-        
+        integrand_real = lambda x, k: f(x) * np.cos(k * x)
+        integrand_imag = lambda x, k: -f(x) * np.sin(k * x)
+        result_real = integrate.quad(integrand_real, 0, 2*np.pi, args=(k,))[0] / (2 * np.pi) 
+        result_imag = integrate.quad(integrand_imag, 0, 2*np.pi, args=(k,))[0] / (2 * np.pi)
+        u0[k+N2] = result_real + 1j * result_imag
+ 
     return u0
 
 
