@@ -71,4 +71,9 @@ def TridiagonalMultiplication(d, l, u, x):
     
     return result
 
+
+
+    
+    
+
     

@@ -8,6 +8,7 @@ import importlib
 importlib.reload(GeneralFunctionality)
 from GeneralFunctionality import *
 
+
 ##########################################################
 def LegendreGaussLobattoNodes(N):
     # Finding the Legendre Gauss Lobatto Nodes
@@ -52,8 +53,12 @@ def LegendreGaussLobattoWeights(x):
     
 ######################################################################
 def BarycentricWeights(x):
-    # Calculating Barycentric Weights
+    # Calculating normalized Barycentric Weights
     # x: xj, j=0,1,...,N, interpolation nodes
+    # The original weights is normalized against the maximum absolute weight
+    # This function calculates the weights directly according to the formula,
+    # which only works when the number of interpolating points is small.
+    # When N is about 800, this function collapses.
     
     N = len(x) - 1
     
@@ -65,7 +70,7 @@ def BarycentricWeights(x):
                 w[j] *= (x[j] - x[i])
     
     w = 1 / w
-    return w
+    return w / np.linalg.norm(w, np.inf)
     
 ######################################################################
 def PolynomialDiffMatrix(x, w):
@@ -97,6 +102,16 @@ def ChebyshevGaussLobattoNodes(N):
     x = np.cos(np.pi*J/N)
     
     return x
+
+def ChebyshevGaussLobattoWeights(x):
+    # Calculating the Legendre Gauss Lobatto weights
+    # For inner nodes, the weight is pi/N
+    # For end nodes, the weigh is pi/(2N)
+    N = len(x) - 1
+    w = np.ones(N+1) * np.pi / N
+    w[0] *= 0.5
+    w[-1] *= 0.5
+    return w
 
 ######################################################################
 def ChebyshevGaussLobattoNodes_Reversed(N):
