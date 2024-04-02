@@ -112,6 +112,54 @@ def MatEqnSolver_NodalGalerkin(A, B, S, E, F, N, M):
     U = Vector_1D_to_2D(u, N, M)
     return U
 
+##########################################################
+# Functions for the nodal Galerkin method in a square
+##########################################################
+
+def MatEqnConverter_Square_NodalGalerkin_Dirichlet(Gx, Gy, wx, wy, RHS, N, M):
+    # Constructing the matrix and rhs for the 2D potential problem in a square
+    # with Dirichlet boundary conditions, using the nodal Galerkin method
+    
+    # The unknowns are inner values of U, which is (N+1) * (M+1)
+    # The inner values are: U_{ij}: i=1,...,N-1, j=1,...,M-1
+    
+    # Gx Gy: the matrices appear in the formula
+    
+    # wx, wy: Legendre-Gauss-Lobatto nodes
+    
+    # RHS: known right-hand side, (N+1)*(M+1)
+    # RHS_{ij}: i=0,...,N, j=0,...,M
+    # Note that only inner values of RHS are used: i=1,...,N-1, j=1,...,M-1
+    # and the boundary values of RHS are not set and not used.
+    # However, the whole RHS must be used as input
+    # The shapes of the input must be correct, there is no check against wrong inputs
+    
+    num_unknowns = (N-1) * (M-1)
+    
+    C = np.zeros((num_unknowns, num_unknowns))
+    d = np.zeros(num_unknowns)
+    
+    for i in range(1,N): # i=1,...,N-1
+        for j in range(1,M): # j=1,...,M-1
+            ind_1st = index_2D_to_1D_ver2(i,j,M)
+            # Find d[ind_1st]
+            d[ind_1st] = RHS[i,j]
+            # Find C[ind_1st,:]
+            for n in range(1,N): # n=1,...,N-1
+                ind_2nd = index_2D_to_1D_ver2(n,j,M)
+                C[ind_1st, ind_2nd] += wy[j] * Gx[i,n]
+                
+            for m in range(1,M): # m=1,...,M-1
+                ind_2nd = index_2D_to_1D_ver2(i,m,M)
+                C[ind_1st, ind_2nd] += wx[i] * Gy[j,m]
+    
+    return C, d
+
+def MatEqnSolver_Square_NodalGalerkin(C, d, N, M):
+    # Solving the matrix Cu = d and reshape the solution
+    u = np.linalg.solve(C, d)
+    return u.reshape(N-1, M-1)
+
 
 
 ##########################################################
@@ -238,7 +286,280 @@ def MatEqnSolver_NonsquareCollocation(C, d, N, M):
     # Solving the matrix Cu = d and reshape the solution
     u = np.linalg.solve(C, d)
     return u.reshape(N-1, M-1)
+
+
+
+#############################################################
+# Functions for the nodal Galerkin method in nonsquare domain
+#############################################################
+def cal_Coefficients_A_Nonsquare_NodalGalerkin_Dirichlet(i, j, k, pars):
+    # The nodal Galerkin method
+    # Computing the coefficients A_k^{(i,j)} of the algebraic system
+    # for the 2D potential problem in nonsquare domain
+    # with Dirichlet boundary conditions
+    
+    # pars = (w_xi, w_eta, D_xi, D_eta, coeff_xi, coeff_eta, coeff_mixed, N, M)
+    
+    # w_xi: Legendre-Gauss-Lobatto points in the xi direction
+    # w_eta: Legendre-Gauss-Lobatto points in the eta direction
+    
+    # D_xi: (N+1)*(N+1) differentiation matrix wrt xi
+    # D_eta: (M+1)*(M+1) differentiation matrix wrt eta
     
     
+    # coeff_xi = (X_xi^2 + Y_xi^2)/J
+    # coeff_eta = (X_eta^2 + Y_eta^2)/J
+    # coeff_mixed = (X_xi X_eta + Y_xi Y_eta)/J
+    
+    # N, M: numbers of nodes in the xi and eta directions.
+    
+    w_xi, w_eta, D_xi, D_eta, coeff_xi, coeff_eta, coeff_mixed, N, M = pars
+    
+    A = 0
+    for n in range(0,N+1): # n=0,...,N
+        A += - w_xi[n] * w_eta[j] * coeff_eta[n,j] * D_xi[n,k] * D_xi[n,i]
+    
+    return A
+
+def cal_Coefficients_B_Nonsquare_NodalGalerkin_Dirichlet(i, j, n, s, pars):
+    # The nodal Galerkin method
+    # Computing the coefficients B of the algebraic system
+    # for the 2D potential problem in nonsquare domain
+    # with Dirichlet boundary conditions
+    
+    # pars = (w_xi, w_eta, D_xi, D_eta, coeff_xi, coeff_eta, coeff_mixed, N, M)
+    
+    # w_xi: Legendre-Gauss-Lobatto points in the xi direction
+    # w_eta: Legendre-Gauss-Lobatto points in the eta direction
+    
+    # D_xi: (N+1)*(N+1) differentiation matrix wrt xi
+    # D_eta: (M+1)*(M+1) differentiation matrix wrt eta
+    
+    
+    # coeff_xi = (X_xi^2 + Y_xi^2)/J
+    # coeff_eta = (X_eta^2 + Y_eta^2)/J
+    # coeff_mixed = (X_xi X_eta + Y_xi Y_eta)/J
+    
+    # N, M: numbers of nodes in the xi and eta directions.
+    
+    w_xi, w_eta, D_xi, D_eta, coeff_xi, coeff_eta, coeff_mixed, N, M = pars
+    
+    B = w_xi[n] * w_eta[j] * coeff_mixed[n,j] * D_eta[j,s] * D_xi[n,i]
+    
+    return B
+
+def cal_Coefficients_C_Nonsquare_NodalGalerkin_Dirichlet(i, j, k, m, pars):
+    # The nodal Galerkin method
+    # Computing the coefficients C_{km}^{(i,j)} of the algebraic system
+    # for the 2D potential problem in nonsquare domain
+    # with Dirichlet boundary conditions
+    
+    # pars = (w_xi, w_eta, D_xi, D_eta, coeff_xi, coeff_eta, coeff_mixed, N, M)
+    
+    # w_xi: Legendre-Gauss-Lobatto points in the xi direction
+    # w_eta: Legendre-Gauss-Lobatto points in the eta direction
+    
+    # D_xi: (N+1)*(N+1) differentiation matrix wrt xi
+    # D_eta: (M+1)*(M+1) differentiation matrix wrt eta
+    
+    
+    # coeff_xi = (X_xi^2 + Y_xi^2)/J
+    # coeff_eta = (X_eta^2 + Y_eta^2)/J
+    # coeff_mixed = (X_xi X_eta + Y_xi Y_eta)/J
+    
+    # N, M: numbers of nodes in the xi and eta directions.
+    
+    w_xi, w_eta, D_xi, D_eta, coeff_xi, coeff_eta, coeff_mixed, N, M = pars
+    
+    C = w_xi[i] * w_eta[m] * coeff_mixed[i,m] * D_xi[i,k] * D_eta[m,j] 
+    
+    return C
+
+
+def cal_Coefficients_D_Nonsquare_NodalGalerkin_Dirichlet(i, j, s, pars):
+    # The nodal Galerkin method
+    # Computing the coefficients D_s^{(i,j)} of the algebraic system
+    # for the 2D potential problem in nonsquare domain
+    # with Dirichlet boundary conditions
+    
+    # pars = (w_xi, w_eta, D_xi, D_eta, coeff_xi, coeff_eta, coeff_mixed, N, M)
+    
+    # w_xi: Legendre-Gauss-Lobatto points in the xi direction
+    # w_eta: Legendre-Gauss-Lobatto points in the eta direction
+    
+    # D_xi: (N+1)*(N+1) differentiation matrix wrt xi
+    # D_eta: (M+1)*(M+1) differentiation matrix wrt eta
+    
+    
+    # coeff_xi = (X_xi^2 + Y_xi^2)/J
+    # coeff_eta = (X_eta^2 + Y_eta^2)/J
+    # coeff_mixed = (X_xi X_eta + Y_xi Y_eta)/J
+    
+    # N, M: numbers of nodes in the xi and eta directions.
+    
+    w_xi, w_eta, D_xi, D_eta, coeff_xi, coeff_eta, coeff_mixed, N, M = pars
+    
+    D = 0
+    for m in range(0,M+1): # m=0,...,M+1
+        D += - w_xi[i] * w_eta[m] * coeff_xi[i,m] * D_eta[m,s] * D_eta[m,j]
+    
+    return D
+
+
+def cal_RHS_Nonsquare_NodalGalerkin_Dirichlet(U, S, J, w_xi, w_eta, D_xi, D_eta, coeff_xi, coeff_eta, coeff_mixed, N, M):
+    # Computing the right-hand side obtained by moving all known terms
+    # U: the solution matrix, only the boundary values are used
+    # S: Source term
+    # J: Jacobi
+    
+    # w_xi: Legendre-Gauss-Lobatto points in the xi direction
+    # w_eta: Legendre-Gauss-Lobatto points in the eta direction
+    
+    # D_xi: (N+1)*(N+1) differentiation matrix wrt xi
+    # D_eta: (M+1)*(M+1) differentiation matrix wrt eta
+    
+    
+    # coeff_xi = (X_xi^2 + Y_xi^2)/J
+    # coeff_eta = (X_eta^2 + Y_eta^2)/J
+    # coeff_mixed = (X_xi X_eta + Y_xi Y_eta)/J
+    
+    # N,M : numbers of nodes in the xi and eta directions
+    
+    
+    RHS = J * S
+    
+    pars = (w_xi, w_eta, D_xi, D_eta, coeff_xi, coeff_eta, coeff_mixed, N, M)
+    
+    for i in range(1, N): # i = 1,...,N-1
+        for j in range(1, M): # j = 1,...,M-1
+            RHS[i,j] *= w_xi[i] * w_eta[j]
+            
+            for k in (0, N):
+                # Computing A_k^{(i,j)}
+                A = cal_Coefficients_A_Nonsquare_NodalGalerkin_Dirichlet(i, j, k, pars)
+                RHS[i,j] -= A * U[k,j]
+            
+            for n in (0, N):
+                for s in range(0, M+1): # s = 0,...,M
+                    # Computing B_{ns}^{(i,j)}
+                    B = cal_Coefficients_B_Nonsquare_NodalGalerkin_Dirichlet(i, j, n, s, pars)
+                    RHS[i,j] -= B * U[n,s]
+                    
+            for n in range(1,N): # n=1,...,N-1
+                for s in (0,M):
+                    # Computing B_{ns}^{(i,j)}
+                    B = cal_Coefficients_B_Nonsquare_NodalGalerkin_Dirichlet(i, j, n, s, pars)
+                    RHS[i,j] -= B * U[n,s]
+                    
+            for k in (0, N):
+                for m in range(0, M+1):
+                    # Computing C_{km}^{(i,j)}
+                    C_ = cal_Coefficients_C_Nonsquare_NodalGalerkin_Dirichlet(i, j, k, m, pars)
+                    RHS[i,j] -= C_ * U[k,m]
+                    
+            for k in range(1, N): # k=1,...,N-1
+                for m in (0, M):
+                    # Computing C_{km}^{(i,j)}
+                    C_ = cal_Coefficients_C_Nonsquare_NodalGalerkin_Dirichlet(i, j, k, m, pars)
+                    RHS[i,j] -= C_ * U[k,m]
+                    
+                    
+            for s in (0, M):
+                # Computing D_s^{(i,j)}
+                D = cal_Coefficients_D_Nonsquare_NodalGalerkin_Dirichlet(i, j, s, pars)
+                RHS[i,j] -= D * U[i,s]
+                    
+    
+    return RHS
+
+
+def MatEqnConverter_Nonsquare_NodalGalerkin_Dirichlet(w_xi, w_eta, D_xi, D_eta, coeff_xi, coeff_eta, coeff_mixed, N, M, RHS):
+    # The nodal Galerkin method
+    # Converting the algebraic system into the form Cx = d
+    # for the 2D potential problem in nonsquare domain
+    # with Dirichlet boundary conditions
+    
+    # w_xi: Legendre-Gauss-Lobatto points in the xi direction
+    # w_eta: Legendre-Gauss-Lobatto points in the eta direction
+    
+    # D_xi: (N+1)*(N+1) differentiation matrix wrt xi
+    # D_eta: (M+1)*(M+1) differentiation matrix wrt eta
+    
+    
+    # coeff_xi = (X_xi^2 + Y_xi^2)/J
+    # coeff_eta = (X_eta^2 + Y_eta^2)/J
+    # coeff_mixed = (X_xi X_eta + Y_xi Y_eta)/J
+    
+    # RHS: the right-hand side after moving all known terms
+    # Note that only inner values of RHS are used: i=1,...,N-1, j=1,...,M-1
+    # and the boundary values of RHS are not set and not used.
+    # However, the whole RHS must be used as input
+    # The shapes of the input must be correct, there is no check against wrong inputs
+    
+    # N, M: numbers of nodes in the xi and eta directions.
+    
+    
+    num_unknowns = (N-1) * (M-1)
+    
+    C = np.zeros((num_unknowns, num_unknowns))
+    d = np.zeros(num_unknowns)
+    
+    pars = (w_xi, w_eta, D_xi, D_eta, coeff_xi, coeff_eta, coeff_mixed, N, M)
+    
+    
+    for i in range(1, N): # i=1,...,N-1
+        for j in range(1, M): # j=1,...,M-1
+            # Compute the row index
+            ind_1st = index_2D_to_1D_ver2(i,j,M)
+            # Find d[ind_1st]
+            d[ind_1st] = RHS[i,j]
+            
+            for k in range(1, N): # k=1,...,N-1
+                # Computing A_k^{(i,j)}
+                A = cal_Coefficients_A_Nonsquare_NodalGalerkin_Dirichlet(i, j, k, pars)
+                # Compute the column index
+                ind_2nd = index_2D_to_1D_ver2(k,j,M)
+                # Update C
+                C[ind_1st, ind_2nd] += A
+            
+            for n in range(1, N): # n=1,...,N-1
+                for s in range(1, M): # s=1,...,M-1
+                    # Computing B_{ns}^{(i,j)}
+                    B = cal_Coefficients_B_Nonsquare_NodalGalerkin_Dirichlet(i, j, n, s, pars)
+                    # Compute the column index
+                    ind_2nd = index_2D_to_1D_ver2(n,s,M)
+                    # Update C
+                    C[ind_1st, ind_2nd] += B
+                    
+            for k in range(1, N): # k=1,...,N-1
+                for m in range(1, M): # m=1,...,M-1
+                    # Computing C_{km}^{(i,j)}
+                    # Due to the repetition of variable names, here we use C_
+                    C_ = cal_Coefficients_C_Nonsquare_NodalGalerkin_Dirichlet(i, j, k, m, pars)
+                    # Computing the column index
+                    # Compute the column index
+                    ind_2nd = index_2D_to_1D_ver2(k,m,M)
+                    # Update C
+                    C[ind_1st, ind_2nd] += C_
+            
+            for s in range(1, M): # s = 1,...,M-1
+                # Computing D_s^{(i,j)}
+                D = cal_Coefficients_D_Nonsquare_NodalGalerkin_Dirichlet(i, j, s, pars)
+                # Compute the column index
+                ind_2nd = index_2D_to_1D_ver2(i,s,M)
+                # Update C
+                C[ind_1st, ind_2nd] += D
+                
+    return C, d
+
+
+##################################################################
+def MatEqnSolver_Cxd(C, d, N, M):
+    # Solving the matrix Cu = d and reshape the solution
+    u = np.linalg.solve(C, d)
+    return u.reshape(N-1, M-1)
+                
+                
+             
     
     
